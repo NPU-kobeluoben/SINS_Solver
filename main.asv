@@ -17,28 +17,83 @@ C(1:2:11,1) = [1;
 %% 统一格式 列状态
 avp = avp';
 imu = imu';
+avp0=[avp0;0]; %补齐初始时间戳
+%% 对齐数据
+pos_align=[];
+pos_align=align_init(pos_align,60);
 %% 仿真缓存
 Step = size(imu,2);
-avp_buff = zeros(10,Step+1); %俯仰、横滚、方位角，东-北-天速度，纬经高，时间t
-avp_buff(:,1) = [avp0;0];
+% avp_buff = zeros(10,Step+1); %俯仰、横滚、方位角，东-北-天速度，纬经高，时间t
+% avp_buff(:,1) = [avp0;0];
+t_align_stop = 0; %终止对准的后一步数
+avp_cnt = 1;
 %%
 sins=[];
-sins=sins_init(sins,avp0,GM,Re,wie,e2,ff,S,C); 
-for t = 1:Step
-    sins=sins_update(sins,imu(:,t));
-    avp_buff(:,t+1)=sins.avp;
+sins_without_align=[];
+for t_setp = 1:Step
+    t = imu(end,t_setp);
+    if sins_without_align.init
+        sins_without_align=sins_init(sins_without_align,avp0,GM,Re,wie,e2,ff,S,C);
+    else
+        
+    end
+    sins_without_align=sins_update(sins_without_align,imu(:,t_setp));
+    avp_without_align(:,t_setp)=sins_without_align.avp;
+    
+    if t<=pos_align.max_end_T
+        pos_align.imu_sum = pos_align.imu_sum+imu(1:6,t_setp);
+    else
+        if ~pos_align.flag
+            pos_align.flag = true;
+            pos_align.t_end_T = imu(end,t_setp-1);
+            pos_align=align_cal(pos_align);
+            t_align_stop = t_setp;
+            
+            avp0_align = [c2a(pos_align.C);0;0;0;avp0(7:9,1);pos_align.t_end_T];
+            if ~sins.init
+                sins=sins_init(sins,avp0_align,GM,Re,wie,e2,ff,S,C);
+            end
+        end
+        sins=sins_update(sins,imu(:,t_setp));
+        avp_buff(:,avp_cnt)=sins.avp;
+        avp_cnt = avp_cnt+1;
+    end
 end
-%% 补齐初始时刻
-avp_ref=[[avp0;0],avp];
+%% 参考avp、无对齐avp提出
+avp_ref=avp(:,t_align_stop:end);
+avp_none_a=avp_without_align(:,t_align_stop:end);
+%% imu 对齐时数据可视化 —— 确保静态对准
+plot_imu_data(imu(1:6,1:t_align_stop-1),imu(end,1:t_align_stop-1));
 %% 对比可视化
-plot_here(avp_ref', avp_buff);
+plot_here(avp_ref', avp_buff,[]);
+%% 是否对齐可视化对比
+plot_here(avp_none_a', avp_buff,'align_cmp');
 
-%%
+%% 对齐数据初始化
+function pos_align=align_init(pos_align,end_T)
+pos_align.imu_sum = zeros(6,1); %角增量和、线速度增量和
+pos_align.max_end_T = end_T; %最大终止对齐时间
+pos_align.t_end_T = end_T; %实际终止对齐时间
+pos_align.imu_mean = zeros(6,1);
+pos_align.C=zeros(3,3); %姿态阵 C^n_b
+pos_align.flag=false;
+end
+%% 双矢量定姿粗对准
+function pos_align=align_cal(pos_align)
+pos_align.imu_mean=pos_align.imu_sum./pos_align.t_end_T;
+w = pos_align.imu_mean(1:3,:);f = pos_align.imu_mean(4:6,:);
+tmp1 = cross(f,w); tmp2 = cross(tmp1,f);
+pos_align.C=[-tmp1'./norm(tmp1);
+             tmp2'./norm(tmp2);
+             f'./norm(f)];
+end
+%% SINS 初始化
 function sins=sins_init(sins,avp0,GM,Re,wie,e2,ff,S,C)
 sins.earth.GM=GM; sins.earth.Re=Re; sins.earth.wie=wie; sins.earth.ff=ff; sins.earth.C=C; sins.earth.S=S;
 sins.earth.e2=e2;
 
-sins.avp=[avp0;0];
+sins.avp=[avp0(1:end-1,1);0];
+sins.start_t = avp0(end,1); %结束对准时间戳
 sins.imu_buff=zeros(7,2); %六轴+时间戳
 sins.q = a2q(avp0(1:3,1));
 sins.q_before=sins.q;
@@ -52,7 +107,7 @@ end
 function sins=sins_update(sins,imu)
 if ~sins.init
     sins.imu_buff(:,1)=imu(:,1); %初始时刻前一字样保持相同——实为单子样
-    dT=imu(end,1);
+    dT=imu(end,1)-sins.start_t; %注意时间戳
 else
     sins.imu_buff(:,1)=sins.imu_buff(:,2);
     dT=imu(end,1)-sins.imu_buff(end,1);
@@ -136,6 +191,36 @@ dv_scul=(cross(dtheta(:,1),dv(:,2))+cross(dv(:,1),dtheta(:,2)))/12;
 dv_rot = cross(dtheta_m,dv_m)/2;
 phi_b = dtheta_m+dphi;
 end
+%% 姿态阵到四元数
+function q=c2q(C)
+q=zeros(4,1);
+if C(1,1)>=C(2,2)+C(3,3)
+    q(2) = 0.5*sqrt(1+C(1,1)-C(2,2)+C(3,3));
+    q(1) = (C(3,2)-C(2,3))/(4*q(2)); q(3)=(C(1,2)+C(2,1))/(4*q(2)); q(4)=(C(1,3)+C(3,1))/(4*q(2));
+elseif C(2,2)>=C(1,1)+C(3,3)
+    q(3) = 0.5*sqrt(1-C(1,1)+C(2,2)-C(3,3));
+    q(1) = (C(1,3)-C(3,1))/(4*q(3)); q(2)=(C(1,2)+C(2,1))/(4*q(3)); q(4)=(C(2,3)+C(3,2))/(4*q(3));
+elseif C(3,3)>=C(1,1)+C(2,2)
+    q(4) = 0.5*sqrt(1-C(1,1)-C(2,2)+C(3,3));
+    q(1) = (C(2,1)-C(1,2))/(4*q(4)); q(2)=(C(1,3)+C(3,1))/(4*q(4)); q(3)=(C(2,3)+C(3,2))/(4*q(4));
+else
+    q(1) = 0.5*sqrt(1+C(1,1)+C(2,2)+C(3,3));
+    q(2) = (C(3,2)-C(2,3))/(4*q(1)); q(3)=(C(1,3)+C(3,1))/(4*q(4)); q(4)=(C(2,1)+C(1,2))/(4*q(4));
+end
+end
+%% 姿态阵到欧拉角
+function eu = c2a(C)
+eu=zeros(3,1);
+eu(1,1) = asin(C(3,2));
+if abs(C(3,2))<=1-1e-5
+    eu(2,1)=-atan2(C(3,1),C(3,3));
+    eu(3,1)=-atan2(C(1,2),C(2,2));
+else
+    eu(2,1)=atan2(C(1,3),C(1,1));
+    eu(3,1)=0;
+end
+end
+
 %% 欧拉角到四元数
 function q=a2q(a) %a: pitch roll yaw （弧度）
 sa = sin(a/2); ca = cos(a/2);

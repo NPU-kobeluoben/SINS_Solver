@@ -154,7 +154,7 @@ plot(t_sins, err_pos(:,3), 'b-', 'LineWidth', 1.2);
 grid on; xlabel('Time (s)'); ylabel('\Delta h (m)');
 title('高度误差');
 
-sgtitle('SINS 解算误差（SINS - Reference）','FontSize', 14, 'FontWeight', 'bold');
 
+sgtitle('SINS 解算误差（SINS - Reference）','FontSize', 14, 'FontWeight', 'bold');
 end
 
