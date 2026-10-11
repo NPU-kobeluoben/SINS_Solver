@@ -1,4 +1,4 @@
-%% 单子样+前一周期
+%% 单子样+前一周期 前60s数据 双矢量对准算法
 clc;
 clear all;
 format long;
@@ -104,7 +104,7 @@ end
 %% 单子样+前一时刻 SINS
 function sins=sins_update(sins,imu)
 if ~sins.init
-    sins.imu_buff(:,1)=imu(:,1); %初始时刻前一字样保持相同——实为单子样
+    sins.imu_buff(:,1)=[zeros(6,1);imu(end,1)]; %初始时刻前一字样为0——实为单子样
     dT=imu(end,1)-sins.start_t; %注意时间戳
 else
     sins.imu_buff(:,1)=sins.imu_buff(:,2);
