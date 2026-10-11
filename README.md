@@ -7,3 +7,7 @@ data2imuavp.mat：三个变量，imu为7列（x\y\z陀螺角增量，x\y\z加计
 avp：为10列参考导航AVP结果（俯仰、横滚、方位角，东-北-天速度，纬经高，时间t），参考导航结果由单子样+前一周期解算得到
 
 avp0：初始时刻的AVP ——【暂时不考虑对准
+
+![results_SINS](D:\C_LAB\Navigation\NPU_course\SINS\week2\coding\fig\results_SINS.svg)
+
+![err_SINS](D:\C_LAB\Navigation\NPU_course\SINS\week2\coding\fig\err_SINS.svg)
