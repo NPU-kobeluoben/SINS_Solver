@@ -8,6 +8,6 @@ avp：为10列参考导航AVP结果（俯仰、横滚、方位角，东-北-天�
 
 avp0：初始时刻的AVP ——【暂时不考虑对准
 
-![results_SINS](D:\C_LAB\Navigation\NPU_course\SINS\week2\coding\fig\results_SINS.svg)
+![results_SINS](fig/results_SINS.svg)
 
-![err_SINS](D:\C_LAB\Navigation\NPU_course\SINS\week2\coding\fig\err_SINS.svg)
+![err_SINS](fig/err_SINS.svg)
